@@ -10,24 +10,28 @@ from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from better_profanity import profanity
 
+# Функция для очистки комментариев от специальных символов
 def clearning(data):
     for comments in data['comments']:
         for comment in comments:
             comment['text'] = re.sub(r"[^a-zA-Z0-9 !?]", "", comment['text'])
     return data
 
+# Функция для лемматизации предложения
 def lemmatization(sentence):
-    nlp = spacy.load('en_core_web_sm', disable=['parser', 'ner'])   # Инициализируем пространственную модель 'en', сохранив только компонент теггера, необходимый для лемматизации
+    nlp = spacy.load('en_core_web_sm', disable=['parser', 'ner'])
     doc = nlp(sentence)
-    sentence = " ".join([token.lemma_ for token in doc])    # Лемматизируем по слову и добавляем в предложение
+    sentence = " ".join([token.lemma_ for token in doc])
     return sentence
 
+# Функция для вычисления коэффициента схожести между строками
 def similarity(s1, s2):
     normalized1 = s1.lower()
     normalized2 = s2.lower()
     matcher = difflib.SequenceMatcher(None, normalized1, normalized2)
     return matcher.ratio()
 
+# Функция для извлечения ключевых слов из предложения
 def key_words(sentence):
     key_tuples = extractor.extract_keywords(sentence)
     key_words = []
@@ -37,6 +41,7 @@ def key_words(sentence):
 
     return key_words
 
+# Функция для пометки слов в предложении их частями речи
 def tagging_words_from_sentence(sentence):
     adjectives_count, adverbs_count, nouns_count, verbs_count, numerals_count = 0, 0, 0, 0, 0
 
@@ -57,6 +62,7 @@ def tagging_words_from_sentence(sentence):
 
     return {'adjectives_count': adjectives_count, 'adverbs_count': adverbs_count, 'nouns_count': nouns_count, 'verbs_count': verbs_count, 'numerals_count': numerals_count}
 
+# Функция для подсчета знаков пунктуации в предложении
 def counting_punctuation_marks(sentence):
     words = sentence.split()
     question_marks_count, exclamation_marks_count = 0, 0
@@ -70,8 +76,8 @@ def counting_punctuation_marks(sentence):
 
     return {'question_marks_count': question_marks_count, 'exclamation_marks_count': exclamation_marks_count}
 
+# Функция для определения тональности текста
 def mood_of_the_text(sentence):
-
     tokens = tokenizer.encode(sentence, return_tensors='pt')
     result = model(tokens)
 
@@ -79,6 +85,7 @@ def mood_of_the_text(sentence):
 
     return correlation
 
+# Функция для проверки наличия нецензурной лексики в предложении
 def dirt_tongue(sentence):
     word_counter = sentence.split()
     dirt_score = 0
@@ -92,37 +99,40 @@ def dirt_tongue(sentence):
 
     return dirt_score
 
+# Считывание данных из JSON-файла с постами
 data = pd.read_json('/Users/konstantin/Downloads/CL_Cup_IT_Data_Scince_секция_кейс_VK_датасет/ranking_train.jsonl', lines=True)
 pd.options.mode.chained_assignment = None
 
+# Выбор первых трех строк данных (для примера)
 data = data.iloc[:3]
 #data = clearning(data)
 
 #nltk.download('punkt')
 #nltk.download('averaged_perceptron_tagger')
 
-extractor = yake.KeywordExtractor(lan = "en",     # язык
-                                  n = 1,          # максимальное количество слов в фразе
-                                  dedupLim = 0.3, # порог похожести слов
-                                  top = 10)        # количество ключевых слов
+# Инициализация объекта для извлечения ключевых слов
+extractor = yake.KeywordExtractor(lan = "en", n = 1, dedupLim = 0.3, top = 10)
 
+# Загрузка токенизатора и модели для анализа тональности
 tokenizer = AutoTokenizer.from_pretrained('nlptown/bert-base-multilingual-uncased-sentiment')
 model = AutoModelForSequenceClassification.from_pretrained('nlptown/bert-base-multilingual-uncased-sentiment')
 
+# Списки для хранения результатов анализа
 all_count_of_key_words, all_count_of_adjectives, all_count_of_adverbs, all_count_of_nouns = [], [], [], []
 all_count_of_verbs, all_count_of_numerals, all_count_of_question_marks, all_count_of_exclamation_marks = [], [], [], []
 all_mood_of_text, all_pohozhest, all_dirt_words = [], [], []
 
+# Итерация по данным для анализа
 for i in tqdm(range(0, len(data))):
     post = data.iloc[i]
-    key_wrds = key_words(post['text'])      # ключевые слова
+    key_wrds = key_words(post['text'])  # ключевые слова
     texts_to_compare = []
 
     for dct in post['comments']:
-        texts_to_compare.append(dct['text'])        # комменты без скора
+        texts_to_compare.append(dct['text'])  # комменты без скора
 
     for k in range(len(texts_to_compare)):
-        texts_to_compare[k] = lemmatization(texts_to_compare[k])    # перезаписываем коммент на лемматизированный коммент
+        texts_to_compare[k] = lemmatization(texts_to_compare[k])  # перезаписываем коммент на лемматизированный коммент
 
     scores = []
     count_of_key_words = []
@@ -137,18 +147,18 @@ for i in tqdm(range(0, len(data))):
     dirt_words = []
 
     for text in texts_to_compare:
-        scores.append(similarity(post['text'], text))   # похожесть коммента на текст поста
+        scores.append(similarity(post['text'], text))  # похожесть коммента на текст поста
 
         count_key_words = 0
         dirt_word = []
 
-        for word in text:       # проверка на ключевые слова
+        for word in text:  # проверка на ключевые слова
             for key_word in key_wrds:
-                if similarity(word, key_word) > 0.3:        # параметр схожести (поиграться)
+                if similarity(word, key_word) > 0.3:  # параметр схожести (поиграться)
                     count_key_words = 1
         count_of_key_words.append(count_key_words)
 
-        parts_of_speech = tagging_words_from_sentence(text)         # количество различных частей речи в тексте
+        parts_of_speech = tagging_words_from_sentence(text)  # количество различных частей речи в тексте
         count_of_adjectives.append(parts_of_speech['adjectives_count'])
         count_of_adverbs.append(parts_of_speech['adverbs_count'])
         count_of_nouns.append(parts_of_speech['nouns_count'])
@@ -179,6 +189,7 @@ for i in tqdm(range(0, len(data))):
 
     all_dirt_words.append(dirt_words)
 
+# Добавление результатов в исходные данные
 data['pohozhest'] = all_pohozhest
 data['key_words'] = all_count_of_key_words
 data['adjectives'] = all_count_of_adjectives
@@ -191,6 +202,7 @@ data['exclamation_marks'] = all_count_of_exclamation_marks
 data['mood'] = all_mood_of_text
 data['dirt_words'] = all_dirt_words
 
+# Извлечение целевых значений из комментариев
 all_targets = []
 for x in range(len(data['comments'])):
     targets = []
